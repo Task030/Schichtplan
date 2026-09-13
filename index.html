@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="SchichtPlan">
+<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>SchichtPlan</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f4f6;color:#111827;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+header{background:#111827;color:white;padding:18px 16px;position:sticky;top:0;z-index:5}header h1{margin:0;font-size:24px}main{max-width:1000px;margin:auto;padding:12px}
+nav{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:10px}button{border:0;border-radius:11px;padding:11px;font-weight:700;background:#e5e7eb}button.primary{background:#111827;color:white}button.danger{background:#fee2e2;color:#991b1b}
+.card{background:white;border-radius:16px;padding:15px;margin:10px 0;box-shadow:0 2px 10px #0000000b}.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+input,select,textarea{width:100%;padding:10px;border:1px solid #d1d5db;border-radius:10px;margin:4px 0 9px;background:white}textarea{min-height:70px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.dow{font-size:11px;color:#6b7280;text-align:center}.day{min-height:82px;background:#f9fafb;border-radius:9px;padding:5px;font-size:11px}.day.today{outline:2px solid #111827}.shift{border-radius:6px;padding:4px;margin-top:3px;background:#dbeafe;overflow:hidden}.stat{font-size:27px;font-weight:800}.muted{color:#6b7280}.hidden{display:none}.listitem{border-top:1px solid #eee;padding:10px 0}.pill{display:inline-block;background:#e5e7eb;border-radius:999px;padding:4px 8px;font-size:12px;margin:2px}
+@media(max-width:600px){nav{grid-template-columns:repeat(4,1fr)}nav button{font-size:11px;padding:9px 4px}.day{min-height:70px;font-size:10px}.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><h1>SchichtPlan</h1><div class="muted" style="color:#cbd5e1">Schicht- & Lohnplaner</div></header>
+<main>
+<nav><button onclick="page('calendar')">📅 Kalender</button><button onclick="page('add')">➕ Schicht</button><button onclick="page('pay')">💶 Lohn</button><button onclick="page('settings')">⚙️ Mehr</button></nav>
+
+<section id="calendar" class="card"><div class="row"><button onclick="moveMonth(-1)">‹</button><button onclick="moveMonth(1)">›</button></div><h2 id="monthTitle"></h2><div id="calendarGrid" class="grid"></div></section>
+
+<section id="add" class="card hidden"><h2>Schicht eintragen</h2>
+<label>Datum<input id="fDate" type="date"></label><label>Schichtname<input id="fName" placeholder="z. B. SOD"></label>
+<div class="row"><label>Beginn<input id="fStart" type="time"></label><label>Ende<input id="fEnd" type="time"></label></div>
+<div class="row"><label>Pause (Min.)<input id="fBreak" type="number" min="0" value="30"></label><label>Typ<select id="fType"><option>Arbeit</option><option>Urlaub</option><option>Krank</option><option>Frei</option></select></label></div>
+<label>Ort / Strecke<input id="fPlace" placeholder="z. B. Ostkreuz / RE2"></label><label>Notiz<textarea id="fNote"></textarea></label>
+<button class="primary" onclick="addShift()">Schicht speichern</button><div id="shiftList"></div></section>
+
+<section id="pay" class="card hidden"><h2>Lohnrechner</h2><p class="muted">Monat: <span id="payMonth"></span>. Zuschläge werden als €/h eingegeben. Die Netto-Schätzung ist bewusst optional.</p>
+<label>Grundlohn €/h<input id="pBase" type="number" step=".01" value="15.95"></label>
+<div class="row"><label>Nacht €/h<input id="pNight" type="number" step=".01" value="0"></label><label>Sonntag €/h<input id="pSun" type="number" step=".01" value="0"></label></div>
+<div class="row"><label>Feiertag €/h<input id="pHoliday" type="number" step=".01" value="0"></label><label>Samstag €/h<input id="pSat" type="number" step=".01" value="0"></label></div>
+<label>Sonstige €/h<input id="pOther" type="number" step=".01" value="0"></label><label>Festgehalt €<input id="pFixed" type="number" step=".01" value="0"></label>
+<button class="primary" onclick="calculate()">Berechnen</button>
+<div class="card"><div class="muted">Arbeitszeit</div><div class="stat" id="outHours">0,00 h</div><div class="muted">Geschätzter Bruttolohn</div><div class="stat" id="outGross">0,00 €</div></div>
+<p class="muted">Hinweis: Dies ist eine Planungshilfe und keine verbindliche Lohnabrechnung. Steuer-/Sozialabgaben und tarifliche Besonderheiten können abweichen.</p></section>
+
+<section id="settings" class="card hidden"><h2>Mehr</h2><button onclick="exportData()">💾 Daten exportieren</button><button onclick="importData()">📥 Daten importieren</button><input id="importFile" type="file" accept=".json" class="hidden">
+<p class="muted">Die Schichtdaten liegen zunächst lokal im Browser dieser Web-App. Exportiere regelmäßig eine Sicherung.</p>
+<button class="danger" onclick="wipe()">Alle Schichtdaten löschen</button></section>
+</main>
+<script>
+const KEY="schichtplan-data-v2";let shifts=JSON.parse(localStorage.getItem(KEY)||"[]");let cur=new Date();
+const $=id=>document.getElementById(id), euro=n=>new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(n);
+function persist(){localStorage.setItem(KEY,JSON.stringify(shifts))}
+function page(id){["calendar","add","pay","settings"].forEach(x=>$(x).classList.toggle("hidden",x!==id));if(id==="calendar")render();if(id==="add")list();if(id==="pay")calculate()}
+function minutes(s){let a=s.start.split(":").map(Number),b=s.end.split(":").map(Number),x=a[0]*60+a[1],y=b[0]*60+b[1];if(y<=x)y+=1440;return Math.max(0,y-x-(+s.break||0))}
+function hours(s){return minutes(s)/60}
+function addShift(){let s={id:Date.now(),date:$("fDate").value,name:$("fName").value||"Schicht",start:$("fStart").value,end:$("fEnd").value,break:+$("fBreak").value||0,type:$("fType").value,place:$("fPlace").value,note:$("fNote").value};if(!s.date)return alert("Bitte ein Datum wählen.");if((s.type==="Arbeit")&&(!s.start||!s.end))return alert("Bei Arbeit bitte Beginn und Ende angeben.");if(s.type!=="Arbeit"){s.start=s.start||"00:00";s.end=s.end||"00:00";}shifts.push(s);persist();render();list();alert("Gespeichert.")}
+function list(){let arr=[...shifts].sort((a,b)=>b.date.localeCompare(a.date));$("shiftList").innerHTML="<h3>Einträge</h3>"+arr.map(s=>`<div class="listitem"><b>${s.date} · ${s.name}</b><br><span class="pill">${s.type}</span> ${s.start}–${s.end} · ${hours(s).toFixed(2)} h<br>${s.place||""}${s.note?"<br>"+s.note:""}<br><button onclick="removeShift(${s.id})">Löschen</button></div>`).join("")}
+function removeShift(id){shifts=shifts.filter(s=>s.id!==id);persist();render();list();calculate()}
+function render(){let y=cur.getFullYear(),m=cur.getMonth(),first=new Date(y,m,1),last=new Date(y,m+1,0);$("monthTitle").textContent=cur.toLocaleDateString("de-DE",{month:"long",year:"numeric"});$("payMonth").textContent=$("monthTitle").textContent;let h=["Mo","Di","Mi","Do","Fr","Sa","So"].map(d=>`<div class="dow">${d}</div>`).join(""),off=(first.getDay()+6)%7;h+="<div></div>".repeat(off);for(let d=1;d<=last.getDate();d++){let ds=`${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`,today=new Date().toISOString().slice(0,10),ss=shifts.filter(s=>s.date===ds);h+=`<div class="day ${ds===today?"today":""}" onclick="openDate('${ds}')"><b>${d}</b>${ss.map(s=>`<div class="shift">${s.name}<br>${s.start}–${s.end}</div>`).join("")}</div>`}$("calendarGrid").innerHTML=h}
+function openDate(ds){$("fDate").value=ds;page("add")}
+function moveMonth(n){cur.setMonth(cur.getMonth()+n);render();calculate()}
+function calculate(){let y=cur.getFullYear(),m=cur.getMonth(),arr=shifts.filter(s=>{let d=new Date(s.date+"T12:00");return d.getFullYear()===y&&d.getMonth()===m&&s.type==="Arbeit"}),h=arr.reduce((a,s)=>a+hours(s),0),rate=(+$("pBase").value||0)+[ "pNight","pSun","pHoliday","pSat","pOther"].reduce((a,k)=>a+(+$(k).value||0),0),g=(+$("pFixed").value||0)+h*rate;$("outHours").textContent=h.toFixed(2).replace(".",",")+" h";$("outGross").textContent=euro(g)}
+function exportData(){let blob=new Blob([JSON.stringify({version:2,exported:new Date().toISOString(),shifts},null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="SchichtPlan-Backup.json";a.click();URL.revokeObjectURL(a.href)}
+function importData(){ $("importFile").click();$("importFile").onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let x=JSON.parse(r.result);if(!Array.isArray(x.shifts))throw 0;shifts=x.shifts;persist();render();list();calculate();alert("Backup importiert.")}catch(_){alert("Die Datei ist kein gültiges SchichtPlan-Backup.")}};r.readAsText(f)}}
+function wipe(){if(confirm("Wirklich alle Einträge löschen?")){shifts=[];persist();render();list();calculate()}}
+$("fDate").value=new Date().toISOString().slice(0,10);render();if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script></body></html>
